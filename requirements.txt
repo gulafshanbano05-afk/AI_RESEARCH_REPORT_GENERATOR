@@ -1,0 +1,10 @@
+streamlit
+langgraph
+langchain
+langchain-groq
+pydantic
+tavily-python
+wikipedia
+reportlab
+python-docx
+python-dotenv
