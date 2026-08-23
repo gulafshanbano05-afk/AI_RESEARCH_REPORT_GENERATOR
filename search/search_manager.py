@@ -1,4 +1,5 @@
 import os
+import streamlit as st
 
 import wikipedia
 from tavily import TavilyClient
@@ -37,13 +38,19 @@ def search_wikipedia(topic: str) -> list:
 
 
 def search_tavily(topic: str) -> list:
-    """Search the web using Tavily and return structured sources."""
+    """Search the web using Tavily and return structured source information."""
 
     api_key = os.getenv("TAVILY_API_KEY")
 
     if not api_key:
+        try:
+            api_key = st.secrets["TAVILY_API_KEY"]
+        except Exception:
+            api_key = None
+
+    if not api_key:
         raise ValueError(
-            "TAVILY_API_KEY is not set in the .env file."
+            "TAVILY_API_KEY is not configured."
         )
 
     client = TavilyClient(api_key=api_key)
@@ -61,7 +68,6 @@ def search_tavily(topic: str) -> list:
     sources = []
 
     for result in results:
-
         sources.append(
             {
                 "title": result.get("title", ""),
@@ -82,5 +88,7 @@ def search_topic(topic: str) -> dict:
 
     return {
         "topic": topic,
+        "wikipedia": wikipedia_sources,
+        "tavily": tavily_sources,
         "sources": wikipedia_sources + tavily_sources
     }
