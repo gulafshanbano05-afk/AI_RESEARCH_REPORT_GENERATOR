@@ -5,53 +5,92 @@ def citation_agent(
     topic: str,
     research_data: dict,
     research_notes: str,
-    fact_check: str
+    fact_check: dict
 ) -> str:
     """
     Identify and organize the sources used during research.
+
+    The citation agent only uses source information that was
+    actually returned by the research/search stage.
     """
 
     llm = get_llm()
 
+    sources = research_data.get("sources", [])
+
     prompt = f"""
-You are an academic citation assistant.
+You are an academic citation specialist.
+
+Your task is to create a reliable references section
+for a research report.
 
 Research Topic:
 {topic}
 
-Wikipedia Research:
-{research_data.get("wikipedia", "")}
+========================================
+RETRIEVED SOURCES
+========================================
 
-Web Search Results:
-{research_data.get("tavily", "")}
+{sources}
 
-Research Notes:
+========================================
+RESEARCH NOTES
+========================================
+
 {research_notes}
 
-Fact-Checking Results:
+========================================
+FACT-CHECKING RESULTS
+========================================
+
 {fact_check}
 
-Your task is to create a clean academic references section
-using ONLY the sources provided above.
+========================================
+STRICT SOURCE RULES
+========================================
 
-For each source, provide:
+1. Use ONLY sources explicitly present in the
+   retrieved sources above.
 
-1. Source title
-2. Website or publisher
-3. URL
-4. A short description of what information the source supports
+2. NEVER invent a source.
 
-Rules:
+3. NEVER invent a URL.
 
-- Do not invent sources.
-- Do not invent URLs.
-- Do not invent authors or publication dates.
-- Only use sources that appear in the provided research data.
-- Remove duplicate sources.
-- Prefer sources that directly support the research topic.
-- If source information is incomplete, clearly indicate that it is incomplete.
+4. NEVER guess a URL from a source title.
 
-Format the final result as:
+5. NEVER invent an author.
+
+6. NEVER invent a publication date.
+
+7. Do not use your general knowledge to add sources.
+
+8. Do not cite a source simply because it is famous
+   or relevant. It must appear in the retrieved sources.
+
+9. Remove duplicate sources.
+
+10. If a source does not contain enough information
+    to identify its URL, write:
+
+    URL: Not available in retrieved source data
+
+11. If the publisher is unavailable, write:
+
+    Publisher: Not available
+
+12. If the title is unavailable, write:
+
+    Title: Not available
+
+13. The "Supports" description must only describe
+    information supported by the retrieved source.
+
+14. Do not introduce new facts while writing
+    the source descriptions.
+
+========================================
+OUTPUT FORMAT
+========================================
 
 REFERENCES
 
@@ -63,7 +102,9 @@ Supports: ...
 URL: ...
 Supports: ...
 
-Continue for all useful sources.
+Continue for all useful unique sources.
+
+Return ONLY the REFERENCES section.
 """
 
     response = llm.invoke(prompt)

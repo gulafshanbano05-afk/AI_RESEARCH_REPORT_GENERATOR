@@ -20,8 +20,9 @@ class ResearchState(TypedDict, total=False):
     research_notes: str
     outline: str
     report: str
-    fact_check: str
+    fact_check: dict
     citations: str
+    revision_count: int
 
 
 # ==========================================
@@ -89,16 +90,27 @@ def outline_node(state: ResearchState):
 
 def writer_node(state: ResearchState):
 
-    print("\n✍️ WRITER AGENT")
+    revision_count = state.get("revision_count", 0)
+
+    if revision_count > 0:
+        print(f"\n✍️ WRITER AGENT — REVISION {revision_count}")
+    else:
+        print("\n✍️ WRITER AGENT")
 
     topic = state["topic"]
     research_notes = state["research_notes"]
     outline = state["outline"]
 
+    # Get previous report and fact-check feedback
+    previous_report = state.get("report", "")
+    fact_check = state.get("fact_check")
+
     report = writer_agent(
         topic,
         research_notes,
-        outline
+        outline,
+        previous_report,
+        fact_check
     )
 
     return {
@@ -124,9 +136,50 @@ def fact_checker_node(state: ResearchState):
         report
     )
 
+    revision_count = state.get("revision_count", 0)
+
+    status = fact_check.get("status", "PASS")
+
+    print(f"   Status: {status}")
+
     return {
-        "fact_check": fact_check
+        "fact_check": fact_check,
+        "revision_count": revision_count
     }
+
+# ==========================================
+# 7. FACT CHECK ROUTER
+# ==========================================
+
+def fact_check_router(state: ResearchState):
+
+    fact_check = state["fact_check"]
+    revision_count = state.get("revision_count", 0)
+
+    status = fact_check.get("status", "PASS")
+
+    if status == "PASS":
+
+        print("\n✅ FACT CHECK PASSED")
+        return "citation"
+
+    if status == "REVISE" and revision_count < 2:
+
+        next_revision = revision_count + 1
+
+        print(
+            f"\n🔄 REVISION REQUIRED "
+            f"(Attempt {next_revision}/2)"
+        )
+
+        state["revision_count"] = next_revision
+
+        return "writer"
+
+    print("\n⚠️ Maximum revisions reached")
+    print("Proceeding to citation.")
+
+    return "citation"
 
 
 # ==========================================
@@ -185,7 +238,14 @@ graph.add_edge("outline", "writer")
 
 graph.add_edge("writer", "fact_checker")
 
-graph.add_edge("fact_checker", "citation")
+graph.add_conditional_edges(
+    "fact_checker",
+    fact_check_router,
+    {
+        "writer": "writer",
+        "citation": "citation"
+    }
+)
 
 graph.add_edge("citation", END)
 

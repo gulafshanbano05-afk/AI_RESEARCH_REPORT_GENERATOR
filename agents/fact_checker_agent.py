@@ -5,65 +5,70 @@ def fact_checker_agent(
     topic: str,
     research_notes: str,
     report: str
-) -> str:
+) -> dict:
     """
     Check the generated report against the available
-    research information.
+    research evidence and decide whether revision is needed.
     """
 
     llm = get_llm()
 
     prompt = f"""
-You are a careful academic fact-checking assistant.
+You are an academic fact checker.
 
-Research Topic:
+Topic:
 {topic}
 
-Research Notes:
+RESEARCH EVIDENCE:
 {research_notes}
 
-Generated Research Report:
+REPORT TO CHECK:
 {report}
 
-Your task is to fact-check the generated report
-against the provided research notes.
+TASK:
+Compare the report ONLY against the research evidence provided.
 
-For every important claim:
+Find important claims in the report that are:
+- unsupported by the research evidence
+- contradictory to the research evidence
+- questionable because the evidence is insufficient
 
-1. Determine whether it is supported by the research.
-2. Identify claims that are unsupported or questionable.
-3. Identify statements that may be misleading.
-4. Suggest corrections when the research supports a correction.
+Do NOT use outside knowledge.
 
-Return your analysis using this structure:
+Return ONLY this format:
 
-FACT CHECK SUMMARY
+STATUS: PASS
 
-Overall Assessment:
-[Write a short assessment]
+ISSUES:
+None
 
-SUPPORTED CLAIMS:
-- Claim:
-- Evidence:
+OR:
 
-QUESTIONABLE OR UNSUPPORTED CLAIMS:
-- Claim:
-- Problem:
-- Suggested correction:
+STATUS: REVISE
 
-MISSING INFORMATION:
-- Information that should be added if supported by the research.
+ISSUES:
+1. [unsupported/questionable claim]
+2. [unsupported/questionable claim]
 
-IMPORTANT RULE:
-Do not use outside knowledge to prove a claim.
-Only use the research notes provided above.
-If the research notes do not contain enough evidence,
-say "Insufficient evidence in provided research."
-
-Do not rewrite the entire report.
-Only provide the fact-checking analysis.
+RULES:
+- PASS if the important claims are reasonably supported.
+- REVISE only when an important factual issue exists.
+- Ignore grammar, wording, style, and minor repetition.
+- Do not invent evidence.
+- Keep the response concise.
+- List at most 3 important issues.
 """
 
     response = llm.invoke(prompt)
 
-    return response.content
+    result = response.content.strip()
+
+    if "STATUS: REVISE" in result:
+        status = "REVISE"
+    else:
+        status = "PASS"
+
+    return {
+        "status": status,
+        "analysis": result
+    }

@@ -8,30 +8,43 @@ from dotenv import load_dotenv
 load_dotenv()
 
 
-def search_wikipedia(topic: str) -> str:
-    """Search Wikipedia for background information."""
+def search_wikipedia(topic: str) -> list:
+    """Search Wikipedia and return structured source information."""
 
     try:
         results = wikipedia.search(topic)
 
         if not results:
-            return "No Wikipedia results found."
+            return []
 
-        page = wikipedia.page(results[0], auto_suggest=False)
+        page = wikipedia.page(
+            results[0],
+            auto_suggest=False
+        )
 
-        return page.summary
+        return [
+            {
+                "title": page.title,
+                "publisher": "Wikipedia",
+                "url": page.url,
+                "content": page.summary
+            }
+        ]
 
     except Exception as e:
-        return f"Wikipedia search failed: {e}"
+        print(f"⚠️ Wikipedia search failed: {e}")
+        return []
 
 
-def search_tavily(topic: str) -> str:
-    """Search the web using Tavily."""
+def search_tavily(topic: str) -> list:
+    """Search the web using Tavily and return structured sources."""
 
     api_key = os.getenv("TAVILY_API_KEY")
 
     if not api_key:
-        raise ValueError("TAVILY_API_KEY is not set in the .env file.")
+        raise ValueError(
+            "TAVILY_API_KEY is not set in the .env file."
+        )
 
     client = TavilyClient(api_key=api_key)
 
@@ -43,28 +56,31 @@ def search_tavily(topic: str) -> str:
     results = response.get("results", [])
 
     if not results:
-        return "No Tavily results found."
+        return []
 
-    formatted_results = []
+    sources = []
 
     for result in results:
-        formatted_results.append(
-            f"Title: {result.get('title')}\n"
-            f"URL: {result.get('url')}\n"
-            f"Content: {result.get('content')}\n"
+
+        sources.append(
+            {
+                "title": result.get("title", ""),
+                "publisher": "Web Search",
+                "url": result.get("url", ""),
+                "content": result.get("content", "")
+            }
         )
 
-    return "\n---\n".join(formatted_results)
+    return sources
 
 
 def search_topic(topic: str) -> dict:
-    """Run both Wikipedia and Tavily searches."""
+    """Run Wikipedia and Tavily searches."""
 
-    wikipedia_result = search_wikipedia(topic)
-    tavily_result = search_tavily(topic)
+    wikipedia_sources = search_wikipedia(topic)
+    tavily_sources = search_tavily(topic)
 
     return {
         "topic": topic,
-        "wikipedia": wikipedia_result,
-        "tavily": tavily_result
+        "sources": wikipedia_sources + tavily_sources
     }
