@@ -2,6 +2,7 @@ streamlit
 langgraph
 langchain
 langchain-groq
+groq
 pydantic
 tavily-python
 wikipedia
