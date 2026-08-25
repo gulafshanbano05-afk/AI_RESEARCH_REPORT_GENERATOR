@@ -1,7 +1,7 @@
 from workflow.research_workflow import research_workflow
 
 
-topic = "Artificial Intelligence in Education"
+topic = "Machine Learning in Healthcare"
 
 
 print("======================================")

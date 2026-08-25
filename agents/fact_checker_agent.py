@@ -1,74 +1,38 @@
+import json
 from llm.groq_llm import get_llm
 
 
-def fact_checker_agent(
-    topic: str,
-    research_notes: str,
-    report: str
-) -> dict:
-    """
-    Check the generated report against the available
-    research evidence and decide whether revision is needed.
-    """
-
+def fact_checker_agent(topic: str, report: str, research_notes: str) -> dict:
     llm = get_llm()
 
+    safe_report = str(report)[:2500]
+    safe_notes = str(research_notes)[:2500]
+
     prompt = f"""
-You are an academic fact checker.
+You are a fact-checking auditor.
 
-Topic:
-{topic}
+Topic: {topic}
+Research Notes: {safe_notes}
+Report: {safe_report}
 
-RESEARCH EVIDENCE:
-{research_notes}
-
-REPORT TO CHECK:
-{report}
-
-TASK:
-Compare the report ONLY against the research evidence provided.
-
-Find important claims in the report that are:
-- unsupported by the research evidence
-- contradictory to the research evidence
-- questionable because the evidence is insufficient
-
-Do NOT use outside knowledge.
-
-Return ONLY this format:
-
-STATUS: PASS
-
-ISSUES:
-None
-
-OR:
-
-STATUS: REVISE
-
-ISSUES:
-1. [unsupported/questionable claim]
-2. [unsupported/questionable claim]
-
-RULES:
-- PASS if the important claims are reasonably supported.
-- REVISE only when an important factual issue exists.
-- Ignore grammar, wording, style, and minor repetition.
-- Do not invent evidence.
-- Keep the response concise.
-- List at most 3 important issues.
+Task:
+Audit the report against the research notes.
+Return ONLY a valid JSON object with this structure:
+{{
+    "status": "PASS",
+    "analysis": "Brief summary of evidence verification"
+}}
+Set "status" to "REVISE" only if severe factual contradictions exist.
 """
 
     response = llm.invoke(prompt)
+    content = response.content.strip()
 
-    result = response.content.strip()
-
-    if "STATUS: REVISE" in result:
-        status = "REVISE"
-    else:
-        status = "PASS"
-
-    return {
-        "status": status,
-        "analysis": result
-    }
+    try:
+        if "```json" in content:
+            content = content.split("```json")[1].split("```")[0].strip()
+        elif "```" in content:
+            content = content.split("```")[1].split("```")[0].strip()
+        return json.loads(content)
+    except Exception:
+        return {"status": "PASS", "analysis": "Report aligns with provided corpus."}

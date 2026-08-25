@@ -1,257 +1,157 @@
-from typing import TypedDict
+import time
+from typing import TypedDict, Any
+from langgraph.graph import StateGraph, END
 
-from langgraph.graph import StateGraph, START, END
-
-from search.search_manager import search_topic
 from agents.research_agent import research_agent
 from agents.outline_agent import outline_agent
 from agents.writer_agent import writer_agent
 from agents.fact_checker_agent import fact_checker_agent
 from agents.citation_agent import citation_agent
+from search.search_manager import search_manager
 
 
-# ==========================================
-# 1. DEFINE THE WORKFLOW STATE
-# ==========================================
+# ============================================================
+# WORKFLOW STATE DEFINITION
+# ============================================================
 
-class ResearchState(TypedDict, total=False):
+class ResearchState(TypedDict):
     topic: str
-    research_data: dict
+    search_data: Any
     research_notes: str
     outline: str
     report: str
     fact_check: dict
-    citations: str
-    revision_count: int
+    citations: list
+    iteration_count: int
 
 
-# ==========================================
-# 2. SEARCH NODE
-# ==========================================
+# ============================================================
+# WORKFLOW NODES
+# ============================================================
 
-def search_node(state: ResearchState):
-
-    print("\n🔎 SEARCH MANAGER")
-
-    topic = state["topic"]
-
-    research_data = search_topic(topic)
-
-    return {
-        "research_data": research_data
-    }
+def search_node(state: ResearchState) -> dict:
+    topic = state.get("topic", "")
+    search_results = search_manager(topic)
+    time.sleep(1.2)
+    return {"search_data": search_results}
 
 
-# ==========================================
-# 3. RESEARCH NODE
-# ==========================================
-
-def research_node(state: ResearchState):
-
-    print("\n🧠 RESEARCH AGENT")
-
-    topic = state["topic"]
-    research_data = state["research_data"]
-
-    notes = research_agent(
-        topic,
-        research_data
-    )
-
-    return {
-        "research_notes": notes
-    }
+def research_node(state: ResearchState) -> dict:
+    topic = state.get("topic", "")
+    search_data = state.get("search_data", "")
+    notes = research_agent(topic=topic, search_results=search_data)
+    time.sleep(1.2)
+    return {"research_notes": notes}
 
 
-# ==========================================
-# 4. OUTLINE NODE
-# ==========================================
-
-def outline_node(state: ResearchState):
-
-    print("\n📋 OUTLINE AGENT")
-
-    topic = state["topic"]
-    research_notes = state["research_notes"]
-
-    outline = outline_agent(
-        topic,
-        research_notes
-    )
-
-    return {
-        "outline": outline
-    }
+def outline_node(state: ResearchState) -> dict:
+    topic = state.get("topic", "")
+    research_notes = state.get("research_notes", "")
+    outline = outline_agent(topic=topic, research_notes=research_notes)
+    time.sleep(1.2)
+    return {"outline": outline}
 
 
-# ==========================================
-# 5. WRITER NODE
-# ==========================================
-
-def writer_node(state: ResearchState):
-
-    revision_count = state.get("revision_count", 0)
-
-    if revision_count > 0:
-        print(f"\n✍️ WRITER AGENT — REVISION {revision_count}")
-    else:
-        print("\n✍️ WRITER AGENT")
-
-    topic = state["topic"]
-    research_notes = state["research_notes"]
-    outline = state["outline"]
-
-    # Get previous report and fact-check feedback
+def writer_node(state: ResearchState) -> dict:
+    topic = state.get("topic", "")
+    research_notes = state.get("research_notes", "")
+    outline = state.get("outline", "")
     previous_report = state.get("report", "")
-    fact_check = state.get("fact_check")
+    fact_check = state.get("fact_check", None)
+    iteration_count = state.get("iteration_count", 0)
 
     report = writer_agent(
-        topic,
-        research_notes,
-        outline,
-        previous_report,
-        fact_check
+        topic=topic,
+        research_notes=research_notes,
+        outline=outline,
+        previous_report=previous_report,
+        fact_check=fact_check
     )
-
+    time.sleep(1.2)
     return {
-        "report": report
+        "report": report,
+        "iteration_count": iteration_count + 1
     }
 
 
-# ==========================================
-# 6. FACT CHECKER NODE
-# ==========================================
+def fact_checker_node(state: ResearchState) -> dict:
+    topic = state.get("topic", "")
+    report = state.get("report", "")
+    research_notes = state.get("research_notes", "")
 
-def fact_checker_node(state: ResearchState):
-
-    print("\n🔍 FACT CHECKER")
-
-    topic = state["topic"]
-    research_notes = state["research_notes"]
-    report = state["report"]
-
-    fact_check = fact_checker_agent(
-        topic,
-        research_notes,
-        report
+    fact_check_result = fact_checker_agent(
+        topic=topic,
+        report=report,
+        research_notes=research_notes
     )
+    time.sleep(1.2)
+    return {"fact_check": fact_check_result}
 
-    revision_count = state.get("revision_count", 0)
 
-    status = fact_check.get("status", "PASS")
+def citation_node(state: ResearchState) -> dict:
+    topic = state.get("topic", "")
+    search_data = state.get("search_data", "")
+    report = state.get("report", "")
 
-    print(f"   Status: {status}")
+    citations = citation_agent(
+        topic=topic,
+        search_data=search_data,
+        report=report
+    )
+    time.sleep(1.2)
+    return {"citations": citations}
 
-    return {
-        "fact_check": fact_check,
-        "revision_count": revision_count
-    }
 
-# ==========================================
-# 7. FACT CHECK ROUTER
-# ==========================================
+# ============================================================
+# CONDITIONAL ROUTING
+# ============================================================
 
-def fact_check_router(state: ResearchState):
+def route_fact_check(state: ResearchState) -> str:
+    fact_check = state.get("fact_check", {})
+    iteration_count = state.get("iteration_count", 0)
 
-    fact_check = state["fact_check"]
-    revision_count = state.get("revision_count", 0)
+    status = str(fact_check.get("status", "PASS")).upper()
 
-    status = fact_check.get("status", "PASS")
-
-    if status == "PASS":
-
-        print("\n✅ FACT CHECK PASSED")
-        return "citation"
-
-    if status == "REVISE" and revision_count < 2:
-
-        next_revision = revision_count + 1
-
-        print(
-            f"\n🔄 REVISION REQUIRED "
-            f"(Attempt {next_revision}/2)"
-        )
-
-        state["revision_count"] = next_revision
-
+    # If revisions needed and under maximum iterations, loop back to writer
+    if status == "REVISE" and iteration_count < 2:
         return "writer"
-
-    print("\n⚠️ Maximum revisions reached")
-    print("Proceeding to citation.")
-
+    
     return "citation"
 
 
-# ==========================================
-# 7. CITATION NODE
-# ==========================================
+# ============================================================
+# GRAPH COMPILATION
+# ============================================================
 
-def citation_node(state: ResearchState):
+workflow = StateGraph(ResearchState)
 
-    print("\n📚 CITATION AGENT")
+# Add Nodes
+workflow.add_node("search", search_node)
+workflow.add_node("research", research_node)
+workflow.add_node("outline", outline_node)
+workflow.add_node("writer", writer_node)
+workflow.add_node("fact_checker", fact_checker_node)
+workflow.add_node("citation", citation_node)
 
-    topic = state["topic"]
-    research_data = state["research_data"]
-    research_notes = state["research_notes"]
-    fact_check = state["fact_check"]
+# Set Entry Point
+workflow.set_entry_point("search")
 
-    citations = citation_agent(
-        topic,
-        research_data,
-        research_notes,
-        fact_check
-    )
+# Add Edges
+workflow.add_edge("search", "research")
+workflow.add_edge("research", "outline")
+workflow.add_edge("outline", "writer")
+workflow.add_edge("writer", "fact_checker")
 
-    return {
-        "citations": citations
-    }
-
-
-# ==========================================
-# 8. CREATE GRAPH
-# ==========================================
-
-graph = StateGraph(ResearchState)
-
-
-# Add nodes
-
-graph.add_node("search", search_node)
-graph.add_node("research", research_node)
-graph.add_node("outline", outline_node)
-graph.add_node("writer", writer_node)
-graph.add_node("fact_checker", fact_checker_node)
-graph.add_node("citation", citation_node)
-
-
-# ==========================================
-# 9. CONNECT NODES
-# ==========================================
-
-graph.add_edge(START, "search")
-
-graph.add_edge("search", "research")
-
-graph.add_edge("research", "outline")
-
-graph.add_edge("outline", "writer")
-
-graph.add_edge("writer", "fact_checker")
-
-graph.add_conditional_edges(
+# Conditional Edge for Fact Check Loop
+workflow.add_conditional_edges(
     "fact_checker",
-    fact_check_router,
+    route_fact_check,
     {
         "writer": "writer",
         "citation": "citation"
     }
 )
 
-graph.add_edge("citation", END)
+workflow.add_edge("citation", END)
 
-
-# ==========================================
-# 10. COMPILE GRAPH
-# ==========================================
-
-research_workflow = graph.compile()
+research_workflow = workflow.compile()

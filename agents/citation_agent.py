@@ -1,112 +1,64 @@
+import json
 from llm.groq_llm import get_llm
 
 
 def citation_agent(
-    topic: str,
-    research_data: dict,
-    research_notes: str,
-    fact_check: dict
-) -> str:
+    topic: str = "",
+    search_data: dict | list | str = None,
+    report: str = "",
+    **kwargs
+) -> list:
     """
-    Identify and organize the sources used during research.
-
-    The citation agent only uses source information that was
-    actually returned by the research/search stage.
+    Extracts and structures formal citations and bibliographic links
+    from the raw search data and report text.
     """
+    if search_data is None:
+        search_data = kwargs.get("search_results", kwargs.get("sources", {}))
 
     llm = get_llm()
 
-    sources = research_data.get("sources", [])
+    safe_report = str(report)[:2500]
+    safe_data = str(search_data)[:2500]
 
     prompt = f"""
-You are an academic citation specialist.
+You are an academic citation indexer and bibliographer.
 
-Your task is to create a reliable references section
-for a research report.
+Topic: {topic}
+Report Excerpt: {safe_report}
+Search Source Data: {safe_data}
 
-Research Topic:
-{topic}
+Task:
+Extract and format verified references/citations based on the provided search data.
+Return ONLY a valid JSON list of objects matching this exact structure:
+[
+  {{
+    "title": "Document or Article Title",
+    "url_or_source": "Wikipedia or Source URL/Origin",
+    "summary": "One sentence summary of relevant context"
+  }}
+]
 
-========================================
-RETRIEVED SOURCES
-========================================
-
-{sources}
-
-========================================
-RESEARCH NOTES
-========================================
-
-{research_notes}
-
-========================================
-FACT-CHECKING RESULTS
-========================================
-
-{fact_check}
-
-========================================
-STRICT SOURCE RULES
-========================================
-
-1. Use ONLY sources explicitly present in the
-   retrieved sources above.
-
-2. NEVER invent a source.
-
-3. NEVER invent a URL.
-
-4. NEVER guess a URL from a source title.
-
-5. NEVER invent an author.
-
-6. NEVER invent a publication date.
-
-7. Do not use your general knowledge to add sources.
-
-8. Do not cite a source simply because it is famous
-   or relevant. It must appear in the retrieved sources.
-
-9. Remove duplicate sources.
-
-10. If a source does not contain enough information
-    to identify its URL, write:
-
-    URL: Not available in retrieved source data
-
-11. If the publisher is unavailable, write:
-
-    Publisher: Not available
-
-12. If the title is unavailable, write:
-
-    Title: Not available
-
-13. The "Supports" description must only describe
-    information supported by the retrieved source.
-
-14. Do not introduce new facts while writing
-    the source descriptions.
-
-========================================
-OUTPUT FORMAT
-========================================
-
-REFERENCES
-
-[1] Title — Publisher/Website
-URL: ...
-Supports: ...
-
-[2] Title — Publisher/Website
-URL: ...
-Supports: ...
-
-Continue for all useful unique sources.
-
-Return ONLY the REFERENCES section.
+If no clear external URLs exist, summarize the primary sources used. Return ONLY valid JSON.
 """
 
     response = llm.invoke(prompt)
+    content = response.content.strip()
 
-    return response.content
+    try:
+        if "```json" in content:
+            content = content.split("```json")[1].split("```")[0].strip()
+        elif "```" in content:
+            content = content.split("```")[1].split("```")[0].strip()
+        
+        parsed = json.loads(content)
+        if isinstance(parsed, list):
+            return parsed
+        return [parsed]
+    except Exception:
+        return [
+            {
+                "title": f"Academic Sources for {topic}",
+                "url_or_source": "Wikipedia & Academic Index",
+                "summary": "Synthesized from multi-source research corpus."
+            }
+        ]

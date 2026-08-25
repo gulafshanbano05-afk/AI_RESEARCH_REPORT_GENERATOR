@@ -1,94 +1,43 @@
 import os
-import streamlit as st
-
-import wikipedia
-from tavily import TavilyClient
 from dotenv import load_dotenv
-
+from langchain_community.tools.tavily_search import TavilySearchResults
+from langchain_community.utilities import WikipediaAPIWrapper
 
 load_dotenv()
 
 
-def search_wikipedia(topic: str) -> list:
-    """Search Wikipedia and return structured source information."""
-
-    try:
-        results = wikipedia.search(topic)
-
-        if not results:
-            return []
-
-        page = wikipedia.page(
-            results[0],
-            auto_suggest=False
-        )
-
-        return [
-            {
-                "title": page.title,
-                "publisher": "Wikipedia",
-                "url": page.url,
-                "content": page.summary
-            }
-        ]
-
-    except Exception as e:
-        print(f"⚠️ Wikipedia search failed: {e}")
-        return []
-
-
-def search_tavily(topic: str) -> list:
-    """Search the web using Tavily and return structured source information."""
-
-    api_key = os.getenv("TAVILY_API_KEY")
-
-    if not api_key:
-        try:
-            api_key = st.secrets["TAVILY_API_KEY"]
-        except Exception:
-            api_key = None
-
-    if not api_key:
-        raise ValueError(
-            "TAVILY_API_KEY is not configured."
-        )
-
-    client = TavilyClient(api_key=api_key)
-
-    response = client.search(
-        query=topic,
-        max_results=5
-    )
-
-    results = response.get("results", [])
-
-    if not results:
-        return []
-
-    sources = []
-
-    for result in results:
-        sources.append(
-            {
-                "title": result.get("title", ""),
-                "publisher": "Web Search",
-                "url": result.get("url", ""),
-                "content": result.get("content", "")
-            }
-        )
-
-    return sources
-
-
-def search_topic(topic: str) -> dict:
-    """Run Wikipedia and Tavily searches."""
-
-    wikipedia_sources = search_wikipedia(topic)
-    tavily_sources = search_tavily(topic)
-
-    return {
-        "topic": topic,
-        "wikipedia": wikipedia_sources,
-        "tavily": tavily_sources,
-        "sources": wikipedia_sources + tavily_sources
+def search_manager(topic: str) -> dict:
+    """
+    Collects research data from Wikipedia and Tavily web search.
+    """
+    results = {
+        "wiki_data": "",
+        "web_data": []
     }
+
+    # 1. Wikipedia Search
+    try:
+        wiki = WikipediaAPIWrapper(
+            top_k_results=2,
+            doc_content_chars_max=2000
+        )
+        results["wiki_data"] = wiki.run(topic)
+    except Exception as e:
+        results["wiki_data"] = f"Wikipedia search unavailable: {str(e)}"
+
+    # 2. Tavily Web Search
+    tavily_api_key = os.getenv("TAVILY_API_KEY")
+
+    if tavily_api_key:
+        try:
+            tavily_tool = TavilySearchResults(
+                max_results=3,
+                tavily_api_key=tavily_api_key
+            )
+            results["web_data"] = tavily_tool.invoke({"query": topic})
+        except Exception as e:
+            results["web_data"] = [{"content": f"Tavily search error: {str(e)}"}]
+    else:
+        results["web_data"] = [{"content": "TAVILY_API_KEY not configured."}]
+
+    return results

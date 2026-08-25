@@ -8,114 +8,50 @@ def writer_agent(
     previous_report: str = "",
     fact_check: dict | None = None
 ) -> str:
-    """
-    Generate a research report.
-
-    If a previous report and fact-check result are provided,
-    revise the report according to the identified issues.
-    """
-
     llm = get_llm()
 
-    # ==========================================
-    # FIRST REPORT GENERATION
-    # ==========================================
+    # Strict safety caps
+    safe_notes = str(research_notes)[:2500]
+    safe_outline = str(outline)[:1200]
 
     if not previous_report or not fact_check:
-
         prompt = f"""
 You are an academic research report writer.
 
-Research Topic:
+Topic:
 {topic}
 
 Research Notes:
-{research_notes}
+{safe_notes}
 
-Approved Report Outline:
-{outline}
+Outline:
+{safe_outline}
 
-Your task is to write a complete, well-structured
-research report based ONLY on the information provided.
-
-IMPORTANT RULES:
-
-1. Follow the approved outline.
-2. Use the research notes as the primary source of information.
-3. Do not invent statistics, studies, facts, or citations.
-4. Do not make unsupported claims.
-5. If the research notes do not provide enough evidence
-   for a point, do not present that point as a fact.
-6. Use clear formal academic English.
-7. Give every major section a heading.
-8. Develop each section with meaningful paragraphs.
-9. Maintain logical flow between sections.
-10. Include a conclusion that summarizes the findings.
-11. Do not include a separate references section unless
-    references are explicitly present in the research notes.
-
-Write only the research report.
+Task:
+Write a structured academic brief using only the facts provided in the research notes.
+Include section headers, an Abstract, Key Findings, and a Brief Conclusion.
+Do not invent facts or citations.
 """
-
-    # ==========================================
-    # REPORT REVISION
-    # ==========================================
-
     else:
-
-        fact_check_analysis = fact_check.get(
-            "analysis",
-            "No detailed feedback was provided."
-        )
-
+        feedback = fact_check.get("analysis", "Address unsupported claims.")
         prompt = f"""
 You are an academic research report editor.
 
-The report below has already been generated and
-was reviewed by a fact-checking agent.
-
-Your job is to REVISE the report so that the
-identified unsupported or questionable claims
-are corrected.
-
-Research Topic:
+Topic:
 {topic}
 
 Research Notes:
-{research_notes}
+{safe_notes}
 
-Approved Report Outline:
-{outline}
+Previous Report:
+{str(previous_report)[:2000]}
 
-PREVIOUS REPORT:
-{previous_report[:8000]}
+Feedback:
+{str(feedback)[:1000]}
 
-FACT-CHECKER FEEDBACK:
-{fact_check_analysis}
-
-IMPORTANT REVISION RULES:
-
-1. Preserve the overall structure and useful content
-   of the previous report.
-2. Address EVERY issue identified by the fact checker.
-3. Remove claims that are not supported by the
-   research notes.
-4. Rewrite unsupported claims only when the research
-   notes provide sufficient evidence.
-5. Do not invent new facts, statistics, studies,
-   citations, or evidence.
-6. Do not use outside knowledge to fill evidence gaps.
-7. If a claim cannot be supported by the research notes,
-   remove it or replace it with a carefully supported
-   statement.
-8. Keep the report academically written and coherent.
-9. Do not mention the fact-checking process in the report.
-10. Do not add a separate references section unless
-    references are explicitly present in the research notes.
-
-Return ONLY the revised research report.
+Task:
+Revise the report strictly following the research notes. Remove unsupported claims.
 """
 
     response = llm.invoke(prompt)
-
     return response.content
