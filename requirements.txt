@@ -9,3 +9,5 @@ wikipedia
 reportlab
 python-docx
 python-dotenv
+langchain-community
+langchain-core
